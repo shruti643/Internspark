@@ -1,102 +1,51 @@
-// =========================================================
-// Navbar: solid background once the page is scrolled
-// =========================================================
-const mainNav = document.getElementById('mainNav');
+const searchBtn = document.getElementById('searchBtn');
+const cityInput = document.getElementById('cityInput');
+const result = document.getElementById('result');
 
-function updateNavBackground() {
-  if (window.scrollY > 20) {
-    mainNav.classList.add('is-scrolled');
-  } else {
-    mainNav.classList.remove('is-scrolled');
-  }
-}
-updateNavBackground();
-window.addEventListener('scroll', updateNavBackground);
+searchBtn.addEventListener('click', async () => {
+  const city = cityInput.value.trim();
+  if (!city) return;
 
-// =========================================================
-// Close the mobile menu after a nav link is tapped
-// =========================================================
-const navMenu = document.getElementById('navMenu');
-const navLinks = document.querySelectorAll('.nav-link');
+  result.innerHTML = "Loading...";
 
-navLinks.forEach((link) => {
-  link.addEventListener('click', () => {
-    if (navMenu.classList.contains('show')) {
-      const bsCollapse = bootstrap.Collapse.getOrCreateInstance(navMenu);
-      bsCollapse.hide();
+  try {
+    // Step 1: get coordinates from city name
+    const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${city}`);
+    const geoData = await geoRes.json();
+
+    if (!geoData.results) {
+      result.innerHTML = "City not found.";
+      return;
     }
-  });
+
+    const { latitude, longitude, name } = geoData.results[0];
+
+    // Step 2: get current weather + 5-day forecast
+    const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true&daily=temperature_2m_max,temperature_2m_min&timezone=auto`);
+    const weatherData = await weatherRes.json();
+    const w = weatherData.current_weather;
+    const daily = weatherData.daily;
+
+    let forecastHTML = '<div class="forecast">';
+    for (let i = 0; i < 5; i++) {
+      const date = new Date(daily.time[i]);
+      const day = date.toLocaleDateString('en-US', { weekday: 'short' });
+      forecastHTML += `
+        <div class="day">
+          <p>${day}</p>
+          <p>⬆️${Math.round(daily.temperature_2m_max[i])}°</p>
+          <p>⬇️${Math.round(daily.temperature_2m_min[i])}°</p>
+        </div>`;
+    }
+    forecastHTML += '</div>';
+
+    result.innerHTML = `
+      <h2>${name}</h2>
+      <p>🌡️ ${w.temperature}°C</p>
+      <p>💨 Wind: ${w.windspeed} km/h</p>
+      ${forecastHTML}
+    `;
+  } catch (err) {
+    result.innerHTML = "Error fetching data.";
+  }
 });
-
-// =========================================================
-// Scrollspy: highlight the nav link for the section in view
-// =========================================================
-const sections = document.querySelectorAll('section[id]');
-
-const spyObserver = new IntersectionObserver(
-  (entries) => {
-    entries.forEach((entry) => {
-      if (entry.isIntersecting) {
-        const id = entry.target.getAttribute('id');
-        navLinks.forEach((link) => {
-          link.classList.toggle('is-active', link.getAttribute('href') === `#${id}`);
-        });
-      }
-    });
-  },
-  { rootMargin: '-45% 0px -50% 0px' }
-);
-
-sections.forEach((section) => spyObserver.observe(section));
-
-// =========================================================
-// Hero role typing effect
-// =========================================================
-const roleEl = document.getElementById('roleText');
-const roles = ['Frontend Developer', 'Backend Engineer', 'Problem Solver', 'Open Source Contributor'];
-const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-if (roleEl && !prefersReducedMotion) {
-  let roleIndex = 0;
-  let charIndex = roles[0].length;
-  let deleting = false;
-
-  function tick() {
-    const current = roles[roleIndex];
-
-    if (!deleting) {
-      charIndex++;
-      if (charIndex > current.length) {
-        deleting = true;
-        setTimeout(tick, 1400);
-        return;
-      }
-    } else {
-      charIndex--;
-      if (charIndex < 0) {
-        deleting = false;
-        roleIndex = (roleIndex + 1) % roles.length;
-        charIndex = 0;
-      }
-    }
-
-    roleEl.textContent = roles[roleIndex].slice(0, charIndex);
-    setTimeout(tick, deleting ? 40 : 80);
-  }
-
-  setTimeout(tick, 1400);
-}
-
-// =========================================================
-// Contact form (front-end only — no backend wired up)
-// =========================================================
-const contactForm = document.getElementById('contactForm');
-const formNote = document.getElementById('formNote');
-
-if (contactForm) {
-  contactForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    formNote.textContent = "Thanks for reaching out — I'll reply within a day or two.";
-    contactForm.reset();
-  });
-}
